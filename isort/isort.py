@@ -591,34 +591,70 @@ class SortImports(object):
             straight_modules = self.imports[section]['straight']
             straight_modules = nsorted(straight_modules, key=lambda key: self._module_key(key, self.config, section_name=section))
             from_modules = self.imports[section]['from']
+            #print ("NON_SORTED: ", from_modules)
             from_modules = nsorted(from_modules, key=lambda key: self._module_key(key, self.config, section_name=section))
+            #print ("SORTED: ", from_modules)
+
+
+            if section in ("THIRDPARTY", "FIRSTPARTY"):
+
+                def get_parents_dict(src_list):
+                    dst ={}
+                    for module in src_list:
+                        parent = re.search('^([\w]+)', module).group(1)
+                        if parent not in dst:
+                            dst[parent] = []
+                        dst[parent].append(module)
+                    return dst
+
+                from_modules_dict = get_parents_dict(from_modules)
+                straight_modules_dict = get_parents_dict(straight_modules)
+
+                parent_modules = nsorted(list(set(from_modules_dict.keys() + straight_modules_dict.keys())),
+                                           key=lambda key: self._module_key(key, self.config, section_name=section))
+                subsections = []
+                for parent in parent_modules:
+                    subsections.append((straight_modules_dict.get(parent, []), from_modules_dict.get(parent, [])))
+            else:
+                subsections = [(straight_modules, from_modules)]
 
             section_output = []
-            if self.config['from_first']:
-                self._add_from_imports(from_modules, section, section_output, sort_ignore_case)
-                if self.config['lines_between_types'] and from_modules and straight_modules:
-                    section_output.extend([''] * self.config['lines_between_types'])
-                self._add_straight_imports(straight_modules, section, section_output)
-            else:
-                self._add_straight_imports(straight_modules, section, section_output)
-                if self.config['lines_between_types'] and from_modules and straight_modules:
-                    section_output.extend([''] * self.config['lines_between_types'])
-                self._add_from_imports(from_modules, section, section_output, sort_ignore_case)
+            for subs_straight_modules, subs_from_modules in subsections:
+                #print("SORTED: ", subs_from_modules)
+                subsection_output = []
+                if self.config['from_first']:
+                    self._add_from_imports(subs_from_modules, section, subsection_output, sort_ignore_case)
+                    if self.config['lines_between_types'] and subs_from_modules and subs_straight_modules:
+                        subsection_output.extend([''] * self.config['lines_between_types'])
+                    self._add_straight_imports(subs_straight_modules, section, subsection_output)
+                else:
+                    self._add_straight_imports(subs_straight_modules, section, subsection_output)
+                    if self.config['lines_between_types'] and subs_from_modules and subs_straight_modules:
+                        subsection_output.extend([''] * self.config['lines_between_types'])
+                    self._add_from_imports(subs_from_modules, section, subsection_output, sort_ignore_case)
 
-            if self.config['force_sort_within_sections']:
-                def by_module(line):
-                    section = 'B'
-                    if line.startswith('#'):
-                        return 'AA'
+                if self.config['force_sort_within_sections']:
+                    def by_module(line):
+                        section = 'BB' # VADER CHANGE
+                        if line.startswith('#'):
+                            return 'AA'
 
-                    line = re.sub('^from ', '', line)
-                    line = re.sub('^import ', '', line)
-                    if line.split(' ')[0] in self.config['force_to_top']:
-                        section = 'A'
-                    if not self.config['order_by_type']:
-                        line = line.lower()
-                    return '{0}{1}'.format(section, line)
-                section_output = nsorted(section_output, key=by_module)
+                        if re.search('^from ', line): # VADER CHANGE
+                            section = 'B' # VADER CHANGE
+                        line = re.sub('^from ', '', line)
+                        line = re.sub('^import ', '', line)
+                        if line.split(' ')[0] in self.config['force_to_top']:
+                            section = 'A'
+                        #if not self.config['order_by_type']: # VADER CHANGE
+                        #    line = line.lower()
+                        return '{0}{1}'.format(section, line)
+                    subsection_output = nsorted(subsection_output, key=by_module)
+                if len(subsections)>1:
+                    subsection_output += ['']
+                section_output += subsection_output
+            # Remove the trailing newline
+            if section_output and (section_output[-1] == ''):
+                section_output.pop(-1)
 
             section_name = section
             no_lines_before = section_name in self.config['no_lines_before']
