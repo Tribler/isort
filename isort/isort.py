@@ -610,7 +610,7 @@ class SortImports(object):
                 from_modules_dict = get_parents_dict(from_modules)
                 straight_modules_dict = get_parents_dict(straight_modules)
 
-                parent_modules = nsorted(list(set(from_modules_dict.keys() + straight_modules_dict.keys())),
+                parent_modules = nsorted(list(set(list(from_modules_dict.keys()) + list(straight_modules_dict.keys()))),
                                            key=lambda key: self._module_key(key, self.config, section_name=section))
                 subsections = []
                 for parent in parent_modules:
